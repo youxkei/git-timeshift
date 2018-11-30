@@ -1,0 +1,49 @@
+#!/bin/bash
+set -euo pipefail
+shopt -s extglob
+
+TIMESHIFTS_DIRECTORY_NAME=timeshifts
+STASH_FILE_NAME=stash_for_timeshift
+DOTGIT=$(git rev-parse --show-toplevel)/.git
+TIMESHIFTS_DIRECTORY=$DOTGIT/$TIMESHIFTS_DIRECTORY_NAME
+STASH_FILE=$DOTGIT/$STASH_FILE_NAME
+
+: "mkdir .git/$TIMESHIFTS_DIRECTORY_NAME if it does not exist"
+if [[ ! -e $TIMESHIFTS_DIRECTORY ]]; then
+    mkdir -p $TIMESHIFTS_DIRECTORY
+fi
+
+: "check if .git/$TIMESHIFTS_DIRECTORY_NAME is a directory"
+if [[ ! -d $TIMESHIFTS_DIRECTORY ]]; then
+    echo "'.git/$TIMESHIFTS_DIRECTORY_NAME' is not a directory" 1>&2
+    exit 1
+fi
+
+: "select the recent timeshift"
+if [[ $# -eq 0 ]]; then
+    TIMESHIFT_INDEX=1
+elif [[ $# -eq 1 ]]; then
+    TIMESHIFT_INDEX=$1
+else
+    echo "Usage: $0 [timeshift]"
+fi
+
+TIMESHIFT=$(ls -r $TIMESHIFTS_DIRECTORY | awk "NR==$TIMESHIFT_INDEX" | sed 's/^\(.*\)\.tar\.gz$/\1/')
+
+if [[ -z $TIMESHIFT ]]; then
+    echo "Timeshift $1 does not exist" 1>&2
+    exit 1
+fi
+
+: "restore the git state from the timeshift"
+rm -rf $DOTGIT/!(objects|$TIMESHIFTS_DIRECTORY_NAME)
+tar xzf $TIMESHIFTS_DIRECTORY/$TIMESHIFT.tar.gz -C $DOTGIT
+git reset --hard HEAD >/dev/null
+git clean -ffdx >/dev/null
+
+if [[ -e $STASH_FILE ]]; then
+    git stash apply $(cat $STASH_FILE) >/dev/null
+    rm $STASH_FILE
+fi
+
+echo "Restored from timeshift [$TIMESHIFT_INDEX]:$TIMESHIFT"

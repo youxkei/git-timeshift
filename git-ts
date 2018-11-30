@@ -1,0 +1,31 @@
+#!/bin/bash
+set -euo pipefail
+
+TIMESHIFTS_DIRECTORY_NAME=timeshifts
+STASH_FILE_NAME=stash_for_timeshift
+DOTGIT=$(git rev-parse --show-toplevel)/.git
+TIMESHIFTS_DIRECTORY=$DOTGIT/$TIMESHIFTS_DIRECTORY_NAME
+STASH_FILE=$DOTGIT/$STASH_FILE_NAME
+
+: "mkdir .git/$TIMESHIFTS_DIRECTORY_NAME if it does not exist"
+if [[ ! -e $TIMESHIFTS_DIRECTORY ]]; then
+    mkdir -p $TIMESHIFTS_DIRECTORY
+fi
+
+: "check if .git/$TIMESHIFTS_DIRECTORY_NAME is a directory"
+if [[ ! -d $TIMESHIFTS_DIRECTORY ]]; then
+    echo "'.git/$TIMESHIFTS_DIRECTORY_NAME' is not a directory" 1>&2
+    exit 1
+fi
+
+: "backup the current git state to the timeshift file"
+if git stash -u | grep -q 'Saved working directory'; then
+    git rev-parse stash > $STASH_FILE
+    git stash pop >/dev/null
+fi
+
+TIMESHIFT=$(date --iso-8601="seconds")
+cd $DOTGIT
+tar czf $TIMESHIFTS_DIRECTORY/$TIMESHIFT.tar.gz --exclude ./$TIMESHIFTS_DIRECTORY_NAME --exclude ./objects .
+
+echo "Timeshift saved to $TIMESHIFT"

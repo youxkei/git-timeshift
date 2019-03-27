@@ -2,10 +2,13 @@
 set -euo pipefail
 
 TIMESHIFTS_DIRECTORY_NAME=timeshifts
-STASH_FILE_NAME=stash_for_timeshift
 DOTGIT=$(git rev-parse --show-toplevel)/.git
 TIMESHIFTS_DIRECTORY=$DOTGIT/$TIMESHIFTS_DIRECTORY_NAME
-STASH_FILE=$DOTGIT/$STASH_FILE_NAME
+
+TIMESHIFT_TAR_FILENAME=timeshift.tar
+STASH_FILENAME=stash
+
+TIMESHIFT_HEAD_REF_NAME=TIMESHIFT_HEAD
 
 : "mkdir .git/$TIMESHIFTS_DIRECTORY_NAME if it does not exist"
 if [[ ! -e $TIMESHIFTS_DIRECTORY ]]; then

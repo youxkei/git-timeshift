@@ -1,49 +1,58 @@
 #!/bin/bash
-set -euo pipefail
+set -xeuo pipefail
 shopt -s extglob
 
 TIMESHIFTS_DIRECTORY_NAME=timeshifts
-STASH_FILE_NAME=stash_for_timeshift
 DOTGIT=$(git rev-parse --show-toplevel)/.git
 TIMESHIFTS_DIRECTORY=$DOTGIT/$TIMESHIFTS_DIRECTORY_NAME
-STASH_FILE=$DOTGIT/$STASH_FILE_NAME
+
+TIMESHIFT_TAR_FILENAME=timeshift.tar
+STASH_FILENAME=stash
+
+TIMESHIFT_HEAD_REF_NAME=TIMESHIFT_HEAD
 
 : "mkdir .git/$TIMESHIFTS_DIRECTORY_NAME if it does not exist"
 if [[ ! -e $TIMESHIFTS_DIRECTORY ]]; then
-    mkdir -p $TIMESHIFTS_DIRECTORY
+  mkdir -p $TIMESHIFTS_DIRECTORY
 fi
 
 : "check if .git/$TIMESHIFTS_DIRECTORY_NAME is a directory"
 if [[ ! -d $TIMESHIFTS_DIRECTORY ]]; then
-    echo "'.git/$TIMESHIFTS_DIRECTORY_NAME' is not a directory" 1>&2
-    exit 1
+  echo "'.git/$TIMESHIFTS_DIRECTORY_NAME' is not a directory" 1>&2
+  exit 1
 fi
 
-: "select the recent timeshift"
+: "select timeshift"
 if [[ $# -eq 0 ]]; then
-    TIMESHIFT_INDEX=1
+  TIMESHIFT_HASH=$TIMESHIFT_HEAD_REF_NAME
 elif [[ $# -eq 1 ]]; then
-    TIMESHIFT_INDEX=$1
+  TIMESHIFT_HASH=$1
 else
-    echo "Usage: $0 [timeshift]"
+  echo "Usage: $0 [timeshift]"
+  exit 0
 fi
 
-TIMESHIFT=$(ls -r $TIMESHIFTS_DIRECTORY | awk "NR==$TIMESHIFT_INDEX" | sed 's/^\(.*\)\.tar\.gz$/\1/')
-
-if [[ -z $TIMESHIFT ]]; then
-    echo "Timeshift $1 does not exist" 1>&2
-    exit 1
+: "validate timeshift"
+if ! git cat-file -e $TIMESHIFT_HASH:$TIMESHIFT_TAR_FILENAME; then
+  echo "$TIMESHIFT_HASH is not a timeshift"
+  echo "Usage: $0 [timeshift]"
+  exit 1
 fi
+
+: "create temporary file"
+TEMP_TAR_FILE=$(mktemp --tmpdir)
+trap "rm $TEMP_TAR_FILE" EXIT
 
 : "restore the git state from the timeshift"
-rm -rf $DOTGIT/!(objects|$TIMESHIFTS_DIRECTORY_NAME)
-tar xzf $TIMESHIFTS_DIRECTORY/$TIMESHIFT.tar.gz -C $DOTGIT
+git cat-file -p $TIMESHIFT_HASH:$TIMESHIFT_TAR_FILENAME >$TEMP_TAR_FILE
+rm -rf $DOTGIT/!(objects|$TIMESHIFTS_DIRECTORY_NAME|$TIMESHIFT_HEAD_REF_NAME)
+tar xf $TEMP_TAR_FILE -C $DOTGIT
 git reset --hard HEAD >/dev/null
 git clean -ffdx >/dev/null
 
-if [[ -e $STASH_FILE ]]; then
-    git stash apply $(cat $STASH_FILE) >/dev/null
-    rm $STASH_FILE
+: "restore from stash"
+if git cat-file -e $TIMESHIFT_HASH:$STASH_FILENAME; then
+    git stash apply --index $(git cat-file -p $TIMESHIFT_HASH:$STASH_FILENAME) >/dev/null
 fi
 
-echo "Restored from timeshift [$TIMESHIFT_INDEX]:$TIMESHIFT"
+echo "Restored from $TIMESHIFT_HASH"

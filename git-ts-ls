@@ -2,10 +2,8 @@
 set -euo pipefail
 
 TIMESHIFTS_DIRECTORY_NAME=timeshifts
-STASH_FILE_NAME=stash_for_timeshift
 DOTGIT=$(git rev-parse --show-toplevel)/.git
 TIMESHIFTS_DIRECTORY=$DOTGIT/$TIMESHIFTS_DIRECTORY_NAME
-STASH_FILE=$DOTGIT/$STASH_FILE_NAME
 
 : "mkdir .git/$TIMESHIFTS_DIRECTORY_NAME if it does not exist"
 if [[ ! -e $TIMESHIFTS_DIRECTORY ]]; then
@@ -19,4 +17,4 @@ if [[ ! -d $TIMESHIFTS_DIRECTORY ]]; then
 fi
 
 : "show timeshifts"
-ls -r $TIMESHIFTS_DIRECTORY | awk '{print "["NR"]:"$1}' | sed 's/^\(.*\)\.tar\.gz$/\1/'
+ls $TIMESHIFTS_DIRECTORY | awk '{print $1"^.."$1}' | xargs git log
